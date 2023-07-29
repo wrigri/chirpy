@@ -18,6 +18,13 @@ func middlewareCors(next http.Handler) http.Handler {
 	})
 }
 
+func healthHandler(writer http.ResponseWriter, req *http.Request) {
+	//header := writer.Header()
+	//header["content-type"] = []string{"text/plain; charset=utf-8"}
+	writer.WriteHeader(200)
+	writer.Write([]byte("OK"))
+}
+
 func main() {
 	mux := http.NewServeMux()
 	corsMux := middlewareCors(mux)
@@ -25,10 +32,13 @@ func main() {
 		Addr:    "localhost:8080",
 		Handler: corsMux,
 	}
+	handler := http.StripPrefix("/app/", http.FileServer(http.Dir(".")))
+	mux.Handle("/app/", handler)
+	mux.HandleFunc("/healthz", healthHandler)
 	err := server.ListenAndServe()
 	if err != nil {
 		fmt.Println(err)
 	}
-	//fmt.Println(server)
+	fmt.Println(handler)
 
 }
