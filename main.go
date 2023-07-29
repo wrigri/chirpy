@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func middlewareCors(next http.Handler) http.Handler {
@@ -18,6 +20,17 @@ func middlewareCors(next http.Handler) http.Handler {
 	})
 }
 
+type apiConfig struct {
+	fileserverHits int
+}
+
+func (ac *apiConfig) collectMetrics(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ac.fileserverHits++
+		next.ServeHTTP(w, r)
+	})
+}
+
 func healthHandler(writer http.ResponseWriter, req *http.Request) {
 	//header := writer.Header()
 	//header["content-type"] = []string{"text/plain; charset=utf-8"}
@@ -25,20 +38,41 @@ func healthHandler(writer http.ResponseWriter, req *http.Request) {
 	writer.Write([]byte("OK"))
 }
 
+func (ac *apiConfig) metricsHandler(writer http.ResponseWriter, req *http.Request) {
+	template := `<html>
+
+<body>
+	<h1>Welcome, Chirpy Admin</h1>
+	<p>Chirpy has been visited %d times!</p>
+</body>
+
+</html>`
+	writer.WriteHeader(200)
+	metrics := fmt.Sprintf(template, ac.fileserverHits)
+	writer.Write([]byte(metrics))
+}
+
 func main() {
-	mux := http.NewServeMux()
-	corsMux := middlewareCors(mux)
+	r := chi.NewRouter()
+	api := chi.NewRouter()
+	admin := chi.NewRouter()
+	//mux := http.NewServeMux()
+	apiCfg := apiConfig{}
+	corsMux := middlewareCors(r)
 	server := http.Server{
 		Addr:    "localhost:8080",
 		Handler: corsMux,
 	}
-	handler := http.StripPrefix("/app/", http.FileServer(http.Dir(".")))
-	mux.Handle("/app/", handler)
-	mux.HandleFunc("/healthz", healthHandler)
+	handler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
+	r.Handle("/app", apiCfg.collectMetrics(handler))
+	r.Handle("/app/*", apiCfg.collectMetrics(handler))
+	r.Mount("/api/", api)
+	r.Mount("/admin/", admin)
+	api.Get("/healthz", healthHandler)
+	admin.Get("/metrics", apiCfg.metricsHandler)
 	err := server.ListenAndServe()
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(handler)
 
 }
