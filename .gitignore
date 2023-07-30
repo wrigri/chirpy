@@ -16,7 +16,7 @@ chirpy
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+thunder-tests/
 
 # Go workspace file
 go.work
